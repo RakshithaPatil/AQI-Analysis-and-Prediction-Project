@@ -1,0 +1,94 @@
+# ============================================================
+# .gitignore — AQI Prediction Project
+# ============================================================
+
+# --- Environment & Secrets ---
+.env
+*.env.local
+*.env.production
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.installed.cfg
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.whl
+MANIFEST
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints
+*.ipynb
+
+# --- Data Files (raw data should not be in git) ---
+data/raw/
+data/staging/
+data/processed/
+data/rejected/
+
+# --- Logs ---
+logs/
+*.log
+airflow/logs/
+
+# --- Models (large binary files) ---
+models/
+*.pkl
+*.joblib
+*.h5
+
+# --- MLflow ---
+mlflow_tracking/
+mlruns/
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+*.coverage
+coverage.xml
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Docker ---
+*.dockerignore
+
+# --- Misc ---
+*.bak
+*.tmp
+*.temp

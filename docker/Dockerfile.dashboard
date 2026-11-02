@@ -1,0 +1,25 @@
+# ── Dockerfile.dashboard ────────────────────────────────────────
+# Streamlit AQI Dashboard
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    streamlit==1.35.0 \
+    plotly==5.22.0 \
+    pandas==2.2.2 \
+    numpy==1.26.4 \
+    scikit-learn==1.5.0
+
+COPY dashboard/  ./dashboard/
+COPY data/       ./data/
+COPY transformation/ ./transformation/
+COPY config/     ./config/
+COPY .streamlit/ ./.streamlit/
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8501
+CMD ["streamlit", "run", "dashboard/app.py", \
+     "--server.port=8501", "--server.address=0.0.0.0", \
+     "--browser.gatherUsageStats=false"]

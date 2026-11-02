@@ -1,0 +1,254 @@
+# ============================================================
+# Air Quality Index Analysis and Prediction
+# Central Configuration File
+# ============================================================
+# All sensitive values (passwords, API keys) are loaded from
+# environment variables (.env). This file only contains
+# non-secret configuration.
+# ============================================================
+
+# ----------------------------------------------------------
+# PROJECT
+# ----------------------------------------------------------
+project:
+  name: "AQI Analysis and Prediction"
+  version: "1.0.0"
+  description: "End-to-end data engineering and MLOps pipeline for air quality prediction"
+
+# ----------------------------------------------------------
+# PATHS  (relative to project root)
+# ----------------------------------------------------------
+paths:
+  data_raw: "data/raw"
+  data_staging: "data/staging"
+  data_processed: "data/processed"
+  data_rejected: "data/rejected"
+  models: "models"
+  logs: "logs"
+  mlflow_tracking: "mlflow_tracking"
+
+# ----------------------------------------------------------
+# DATA INGESTION
+# ----------------------------------------------------------
+ingestion:
+  # OpenAQ API v3
+  openaq:
+    base_url: "https://api.openaq.org/v3"
+    # Target locations (location IDs from OpenAQ)
+    # Default: Delhi, Mumbai, Bengaluru, Chennai (Indian cities)
+    location_ids:
+      - 8118    # Delhi - Anand Vihar
+      - 8119    # Delhi - ITO
+      - 9999    # Mumbai - Bandra (example)
+      - 10001   # Bengaluru (example)
+    # Pollutants to collect
+    parameters:
+      - "pm25"
+      - "pm10"
+      - "no2"
+      - "so2"
+      - "co"
+      - "o3"
+    # How many days back to fetch on each run
+    lookback_days: 7
+    # Max results per page
+    limit: 1000
+    # Retry settings
+    retry_attempts: 3
+    retry_delay_seconds: 5
+
+  # Open-Meteo API (no key required)
+  openmeteo:
+    base_url: "https://api.open-meteo.com/v1/forecast"
+    # Weather variables to fetch
+    hourly_variables:
+      - "temperature_2m"
+      - "relative_humidity_2m"
+      - "precipitation"
+      - "wind_speed_10m"
+      - "wind_direction_10m"
+      - "surface_pressure"
+    # Lookback days for historical weather
+    lookback_days: 7
+    retry_attempts: 3
+    retry_delay_seconds: 5
+
+  # Target stations / cities to analyze
+  # lat/lon used for weather API calls
+  stations:
+    - id: "delhi_anand_vihar"
+      name: "Anand Vihar"
+      city: "Delhi"
+      latitude: 28.6469
+      longitude: 77.3164
+    - id: "delhi_ito"
+      name: "ITO"
+      city: "Delhi"
+      latitude: 28.6289
+      longitude: 77.2408
+    - id: "mumbai_bandra"
+      name: "Bandra"
+      city: "Mumbai"
+      latitude: 19.0596
+      longitude: 72.8295
+    - id: "bengaluru_silk_board"
+      name: "Silk Board"
+      city: "Bengaluru"
+      latitude: 12.9170
+      longitude: 77.6229
+    - id: "chennai_alandur"
+      name: "Alandur"
+      city: "Chennai"
+      latitude: 13.0012
+      longitude: 80.2004
+
+# ----------------------------------------------------------
+# DATABASE (PostgreSQL)
+# ----------------------------------------------------------
+database:
+  host: "${DB_HOST}"           # from .env
+  port: 5432
+  name: "${DB_NAME}"           # from .env
+  user: "${DB_USER}"           # from .env
+  password: "${DB_PASSWORD}"   # from .env
+  pool_size: 5
+  max_overflow: 10
+  pool_timeout: 30
+
+# ----------------------------------------------------------
+# ETL / AIRFLOW
+# ----------------------------------------------------------
+etl:
+  # DAG schedule (cron expression)
+  schedule_interval: "@daily"
+  # Timezone
+  timezone: "Asia/Kolkata"
+  # How many past DAG runs to keep
+  max_active_runs: 1
+
+# ----------------------------------------------------------
+# DATA QUALITY
+# ----------------------------------------------------------
+data_quality:
+  # Acceptable pollutant value ranges (μg/m³ or ppm)
+  pollutant_ranges:
+    pm25:
+      min: 0
+      max: 1000      # μg/m³
+    pm10:
+      min: 0
+      max: 1500      # μg/m³
+    no2:
+      min: 0
+      max: 2000      # μg/m³
+    so2:
+      min: 0
+      max: 2620      # μg/m³
+    co:
+      min: 0
+      max: 50        # ppm
+    o3:
+      min: 0
+      max: 600       # μg/m³
+
+  # Coordinate validation
+  latitude_range: [-90, 90]
+  longitude_range: [-180, 180]
+
+  # Maximum allowed missing value percentage
+  max_missing_pct: 30
+
+# ----------------------------------------------------------
+# AQI CALCULATION
+# ============================================================
+# This project uses the US EPA AQI standard.
+# Reference: https://www.airnow.gov/sites/default/files/2020-05/aqi-technical-assistance-document-sept2018.pdf
+# The AQI is calculated for each pollutant independently
+# and the maximum (dominant) AQI is reported.
+# ============================================================
+aqi:
+  standard: "US_EPA"
+  # AQI categories and their color codes (for dashboard)
+  categories:
+    - range: [0, 50]
+      label: "Good"
+      color: "#00E400"
+    - range: [51, 100]
+      label: "Moderate"
+      color: "#FFFF00"
+    - range: [101, 150]
+      label: "Unhealthy for Sensitive Groups"
+      color: "#FF7E00"
+    - range: [151, 200]
+      label: "Unhealthy"
+      color: "#FF0000"
+    - range: [201, 300]
+      label: "Very Unhealthy"
+      color: "#8F3F97"
+    - range: [301, 500]
+      label: "Hazardous"
+      color: "#7E0023"
+
+# ----------------------------------------------------------
+# MACHINE LEARNING
+# ----------------------------------------------------------
+ml:
+  # Chronological split ratios (no random shuffling to avoid leakage)
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+  # Target column
+  regression_target: "aqi"
+  classification_target: "aqi_category"
+
+  # Random seed for reproducibility
+  random_state: 42
+
+  # Model selection metric
+  regression_primary_metric: "mae"    # Lower is better
+  classification_primary_metric: "f1_weighted"  # Higher is better
+
+  # Lag / rolling feature config
+  lag_days: [1, 2, 3, 7]
+  rolling_windows: [3, 7]
+
+  # Cross-validation folds (time-series aware)
+  cv_folds: 5
+
+# ----------------------------------------------------------
+# MLFLOW
+# ----------------------------------------------------------
+mlflow:
+  tracking_uri: "${MLFLOW_TRACKING_URI}"  # from .env
+  experiment_regression: "AQI_Regression"
+  experiment_classification: "AQI_Classification"
+  model_name_regression: "aqi_regressor"
+  model_name_classification: "aqi_classifier"
+
+# ----------------------------------------------------------
+# FASTAPI
+# ----------------------------------------------------------
+api:
+  host: "0.0.0.0"
+  port: 8000
+  title: "AQI Prediction API"
+  version: "1.0.0"
+  # Latency threshold (ms) before logging a warning
+  latency_warning_ms: 500
+
+# ----------------------------------------------------------
+# MONITORING
+# ----------------------------------------------------------
+monitoring:
+  # Population Stability Index threshold for drift alert
+  psi_threshold: 0.2
+  # MAE threshold before triggering retraining alert
+  mae_alert_threshold: 30.0
+  # Minimum new records before retraining is considered
+  retrain_min_new_records: 500
+  # Log file paths
+  drift_log: "logs/drift.log"
+  performance_log: "logs/performance.log"
+  api_log: "logs/api.log"
+  data_quality_log: "logs/data_quality.log"

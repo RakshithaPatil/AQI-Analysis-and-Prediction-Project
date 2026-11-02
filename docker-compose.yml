@@ -1,0 +1,105 @@
+version: "3.9"
+
+# ============================================================
+# AQI Analysis & Prediction — Docker Compose
+# ============================================================
+# Services:
+#   postgres    — PostgreSQL 15 database
+#   dashboard   — Streamlit dashboard  (port 8501)
+#   api         — FastAPI prediction   (port 8000)
+#   mlflow      — MLflow tracking UI   (port 5001)
+#
+# Usage:
+#   docker compose up --build
+#   docker compose down
+# ============================================================
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: aqi_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-aqi_db}
+      POSTGRES_USER:     ${DB_USER:-aqi_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./analytics/analytical_queries.sql:/docker-entrypoint-initdb.d/02_analytics.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-aqi_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI ─────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: aqi_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-aqi_user}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-aqi_db}
+      MLFLOW_TRACKING_URI: http://mlflow:5001
+    volumes:
+      - ./models:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Streamlit Dashboard ─────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: aqi_dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      API_BASE_URL: http://api:8000
+      DATABASE_URL: postgresql://${DB_USER:-aqi_user}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-aqi_db}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - api
+
+  # ── MLflow ──────────────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.13.0
+    container_name: aqi_mlflow
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${DB_USER:-aqi_user}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-aqi_db}
+      MLFLOW_ARTIFACT_ROOT: /mlflow_artifacts
+    volumes:
+      - mlflow_artifacts:/mlflow_artifacts
+    command: >
+      mlflow server
+        --backend-store-uri postgresql://${DB_USER:-aqi_user}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-aqi_db}
+        --default-artifact-root /mlflow_artifacts
+        --host 0.0.0.0
+        --port 5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  mlflow_artifacts:
